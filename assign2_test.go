@@ -27,6 +27,9 @@ func getActionIndex(action []Action, i int) resEvent {
 					res = act.(Send).rEvent.(AppendEntriesRequest)
 				case "AppendEntriesResponse":
 					res = act.(Send).rEvent.(AppendEntriesResponse)
+				case "ClientAppend":
+					res = act.(Send).rEvent.(ClientAppend)
+					
 				default :
 					res = act
 			}
@@ -106,10 +109,8 @@ func candidateVoteResponse(sm StateMachine, vr VoteResponse, action []Action) bo
 	
 	r := getActionIndex(action,0) //majority yes or no
 	if reflect.TypeOf(r).Name() == "StateStore" {
-		//fmt.Println("here")			
 		x := r.(StateStore)
 		if vr.voteGranted == true { // majority yes, turned leader and sent heartbeats
-			//fmt.Println("here too")
 		
 			if yesVotes[sm.Id][sm.currentTerm] > sm.totalServers/2 && (expect(strconv.Itoa(x.state),strconv.Itoa(leader))) && (expect(strconv.Itoa(sm.leaderId),strconv.Itoa(sm.Id))) {
 				if len(action) == sm.totalServers {
@@ -141,15 +142,12 @@ func serverAppendRequest(sm StateMachine, ap AppendEntriesRequest, action []Acti
 			return expect(strconv.FormatBool(x.success),"false")
 		}
 	}
-	fmt.Println(ap.term,sm.currentTerm)
 	if flag == 1 {
 			
 		if reflect.TypeOf(r).Name() == "StateStore" {
 			x := r.(StateStore)
-			//fmt.Println("yo")
 			
 			if (expect(strconv.Itoa(x.state),strconv.Itoa(follower))) && (expect(strconv.Itoa(x.term),strconv.Itoa(ap.term))) && (expect(strconv.Itoa(sm.votedFor),strconv.Itoa(-1))) && (expect(strconv.Itoa(sm.leaderId),strconv.Itoa(ap.leaderId))) {
-				//fmt.Println("yo- yo")
 			
 				r = getActionIndex(action,1)
 				
@@ -162,7 +160,6 @@ func serverAppendRequest(sm StateMachine, ap AppendEntriesRequest, action []Acti
 	}
 	if sm.Log[ap.prevLogIndex].term != ap.prevLogTerm {
 		if reflect.TypeOf(r).Name() == "AppendEntriesResponse" {
-			//fmt.Println("yo-2")
 			
 			x := r.(AppendEntriesResponse)
 			return expect(strconv.FormatBool(x.success),"false")
@@ -170,17 +167,13 @@ func serverAppendRequest(sm StateMachine, ap AppendEntriesRequest, action []Acti
 		return false
 	}
 	if ap.entries == false { //heartbeat
-		fmt.Println(reflect.TypeOf(r).Name())
-		fmt.Println("yo- yo")
 			
 		if reflect.TypeOf(r).Name() == "StateStore" {
 			x := r.(StateStore)
-			fmt.Println("yo-1")
 
 			if (expect(strconv.Itoa(x.leaderId),strconv.Itoa(ap.leaderId))) && (expect(strconv.Itoa(sm.leaderId),strconv.Itoa(ap.leaderId))){
 				if flag ==1 {
 					r = getActionIndex(action,2)						
-	fmt.Println("yo-2")
 
 				} else {
 					r = getActionIndex(action,1)
@@ -342,15 +335,47 @@ func leaderAppendResponse(sm StateMachine, ar AppendEntriesResponse, action []Ac
 		return false
 	}
 }
-			
+
+func leaderTimeout(sm StateMachine, action []Action) bool {
+	r := getActionIndex(action, 0)
+	return reflect.TypeOf(r).Name() == "ClientAppend"
+}		
 				
-	
+func testClientAppend(sm StateMachine,action []Action) bool {
+	if len(action) > 0 {
+			
+		r := getActionIndex(action,0)		
+		if sm.state == leader {
+			
+			count := 0
+			if reflect.TypeOf(r).Name() == "LogStore" {
+				if len(action) == sm.totalServers {
+					for i:=1; i< sm.totalServers; i++ {
+						r = getActionIndex(action, i)
+						if (reflect.TypeOf(r).Name() == "AppendEntriesRequest") {  //n-1
+								count++
+						}
+					}
+					if (count == sm.totalServers-1) {
+							return true
+					}
+				}
+			}
+			return false
+		} else {
+			return reflect.TypeOf(r).Name() == "ClientAppend" 
+		}
+	}
+			
+	return false
+}
+			
+
 
 	
 
 
 func TestCandidate(t *testing.T) {
-	//fmt.Println("1")
 	p := make([]int,5)
 	for i:=0 ; i<5; i++ {
 		p[i] = i+1
@@ -396,17 +421,20 @@ func TestCandidate(t *testing.T) {
 
 	nextIndex = make([]int, 10)
 	matchIndex = make([]int, sm.totalServers+1)
-		//fmt.Println("2")
+
+	action = sm.processEvents(ClientAppend{})
+	if(!testClientAppend(sm,action)) {
+		fmt.Println("client append on candidate failed")
+	}
+
 
 	//-----------------------------------testing for candidate timeout
-	//fmt.Println(sm.currentTerm, sm.votedFor,sm.state)
 	
 	action =  sm.processEvents(Timeout{})
 	
 	if(serverTimeout(sm, action) != true) {
 		fmt.Println("candidate timeout failed")
 	}
-	//fmt.Println("3")	
 	//-----------------------------------testing for candidate vote request
 
 
@@ -416,19 +444,15 @@ func TestCandidate(t *testing.T) {
 	if (candidateVoteRequest(sm, vr, action) != true) {
 		fmt.Println("candidate vote request failed")
 	}
-	//fmt.Println("4")	
 	vr = VoteRequest{2,1,0,0}
 	action =  sm.processEvents(vr) //second case
-	//fmt.Println(sm.currentTerm, sm.votedFor,sm.state)
 	
 	if (candidateVoteRequest(sm, vr, action) != true) {
 		fmt.Println("candidate vote request failed")
 	}
-	//	fmt.Println("5")
 	//-----------------------------------testing for candidate vote response
 	
 	//action =  sm.processEvents(Timeout{}) //-- to ensure candidate state
-	//fmt.Println(sm.currentTerm, sm.votedFor,sm.state) //--- 1,2,2
 	sm = StateMachine{
 		Id: 2, 
 		state: candidate, 
@@ -443,56 +467,37 @@ func TestCandidate(t *testing.T) {
 		commitIndex: 0, 
 		Log: log}
 	
-	//fmt.Println("yo")
-	//fmt.Println(sm.currentTerm, sm.votedFor,sm.state)	
 	vs := VoteResponse{5,false,1}
-	//fmt.Println(sm.currentTerm, sm.votedFor,sm.state)
 	
 	action =  sm.processEvents(vs) //first case
-	//fmt.Println("6")
-	//fmt.Println(sm.currentTerm, sm.votedFor,sm.state)
 	if(!candidateVoteResponse(sm, vs, action)) {
 		fmt.Println("Candidate vote response failed")
 	}
-	//fmt.Println("7")
 	action = sm.processEvents(VoteResponse{1,true,1})
-	//fmt.Println(yesVotes[sm.Id][sm.currentTerm])
-	//fmt.Println(sm.currentTerm, sm.votedFor,sm.state)
 	if (!candidateVoteResponse(sm, VoteResponse{1,true,1}, action) && yesVotes[sm.Id][sm.currentTerm] == 1) {
 		fmt.Println("Candidate vote response failed")
 	}
-	//fmt.Println(yesVotes[sm.Id][sm.currentTerm])
-	//fmt.Println(sm.currentTerm, sm.votedFor,sm.state) //--- 1,2,2 just one vote, no change
 	action = sm.processEvents(VoteResponse{1,true,3})
 	action = sm.processEvents(VoteResponse{1,false,4})
 	if (!candidateVoteResponse(sm, VoteResponse{1,false,4}, action) && noVotes[sm.Id][sm.currentTerm] == 1 && yesVotes[sm.Id][sm.currentTerm] == 2) { //one negative vote, non-majority yes
 		fmt.Println("Candidate vote response failed")
 	}
-	//	fmt.Println("8")
 	action = sm.processEvents(VoteResponse{1,true,5})// majority yes
 	if (!candidateVoteResponse(sm, VoteResponse{1,true,5}, action)) {
 			fmt.Println("Candidate vote response failed")
 	}
-	//fmt.Println(sm.currentTerm, sm.votedFor,sm.state) //--- 1,2,3
-	//	fmt.Println("9")
 	sm.state = candidate
 	sm.currentTerm = 2
-	//	fmt.Println("check")
-	//fmt.Println(sm.currentTerm, sm.votedFor,sm.state) //--- 2,2,2
 	action = sm.processEvents(VoteResponse{2,false,1})
-	//fmt.Println(noVotes[sm.Id][sm.currentTerm])
-	//	fmt.Println("10")
 	action = sm.processEvents(VoteResponse{2,false,3})
 	
 	
 	action = sm.processEvents(VoteResponse{2,true,4})
 	action = sm.processEvents(VoteResponse{2,false,5})
-		//fmt.Println("11")
 	if (!candidateVoteResponse(sm, VoteResponse{2,false,5}, action)) {
 		fmt.Println("Candidate vote response failed")
 	}
-	//fmt.Println(noVotes[sm.Id][sm.currentTerm])
-	fmt.Println(sm.currentTerm, sm.votedFor,sm.state) //--- 2, -1, 1
+	
 	
 
 //------------------------------candidate AppendRequest testing
@@ -596,9 +601,16 @@ func TestFollower(t *testing.T) {
 
 	nextIndex = make([]int, 10)
 	matchIndex = make([]int, sm.totalServers+1)
-	//-----------------------------------testing for candidate timeout
-	//fmt.Println(sm.currentTerm, sm.votedFor,sm.state)
+
+	action = sm.processEvents(ClientAppend{})
+	if(!testClientAppend(sm,action)) {
+		fmt.Println("client append on follower failed")
+	}
+
+
+	//-----------------------------------testing for follower timeout
 	
+
 	action =  sm.processEvents(Timeout{})
 	
 	if(serverTimeout(sm, action) != true) {
@@ -746,6 +758,18 @@ func TestLeader(t *testing.T) {
 
 	nextIndex = make([]int, 10)
 	matchIndex = make([]int, sm.totalServers+1)
+
+
+	action = sm.processEvents(ClientAppend{})
+	if(!testClientAppend(sm,action)) {
+		fmt.Println("client append on leader failed")
+	}
+	action = sm.processEvents(Timeout{})
+	if(!leaderTimeout(sm,action)) {
+		fmt.Println("timeout on leader failed")
+	}
+
+
 	
 	action = sm.processEvents(VoteRequest{1,1,0,0}) //case 2
 	if(!leaderVoteRequest(sm,VoteRequest{1,1,0,0},action)) {
@@ -779,6 +803,7 @@ func TestLeader(t *testing.T) {
 	if(!leaderAppendRequest(sm,AppendEntriesRequest{3,1,0,0,false,0},action)) {
 		fmt.Println("leader append request failed - 1")
 	}
+
 	/*
 	sm = StateMachine{
 		Id: 2, 
@@ -822,5 +847,4 @@ sm.Log[2] = LogEntry{3,false,2}
 		fmt.Println("leader append response failed - 1")
 	}
 */
-
 }	
