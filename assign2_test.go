@@ -272,6 +272,83 @@ func followerVoteRequest(sm StateMachine, vr VoteRequest, action []Action) bool 
 }
 
 
+func leaderVoteRequest(sm StateMachine, vr VoteRequest, action []Action) bool {
+	r := getActionIndex(action,0)
+	if flag == 1 {
+		if reflect.TypeOf(r).Name() == "StateStore" {
+			x := r.(StateStore)
+			return ((expect(strconv.Itoa(x.leaderId),strconv.Itoa(-1))) && (expect(strconv.Itoa(x.state),strconv.Itoa(follower))))
+		}
+		return false
+	} else {
+		if reflect.TypeOf(r).Name() == "VoteResponse" {
+			x := r.(VoteResponse)
+			return (expect(strconv.FormatBool(x.voteGranted),"false"))
+		}
+		return false
+	}
+}
+	
+func leaderAppendRequest(sm StateMachine, ap AppendEntriesRequest, action []Action) bool {
+	r := getActionIndex(action,0)		
+	if sm.leaderId == -1 {
+		
+		if reflect.TypeOf(r).Name() == "StateStore" {
+			x := r.(StateStore)
+			return ((expect(strconv.Itoa(x.leaderId),strconv.Itoa(-1))) && (expect(strconv.Itoa(x.state),strconv.Itoa(follower))))
+		}
+		return false
+	} else {
+		
+		if reflect.TypeOf(r).Name() == "AppendEntriesResponse" {
+			x := r.(AppendEntriesResponse)
+			return (expect(strconv.FormatBool(x.success),"false"))
+		}
+		return false
+	}
+}
+
+func leaderAppendResponse(sm StateMachine, ar AppendEntriesResponse, action []Action) bool {
+	ni := nextIndex[ar.from]
+	mi := matchIndex[ar.from]
+	ap := appended[sm.Id][sm.currentTerm]
+	action = sm.processEvents(ar)
+	r := getActionIndex(action,0)		
+	if flag == 1 {
+		if reflect.TypeOf(r).Name() == "StateStore" {
+			x := r.(StateStore)
+			r = getActionIndex(action,1)		
+			
+			return ((expect(strconv.Itoa(x.leaderId),strconv.Itoa(-1))) && (expect(strconv.Itoa(x.state),strconv.Itoa(follower))))
+		}
+		return false
+	}
+	if !ar.success {
+		if nextIndex[ar.from] > 0 {
+			return (ni-1) == nextIndex[ar.from]
+		}
+		return true
+	}
+	if appended[sm.Id][sm.currentTerm] <= sm.totalServers/2 {
+		return (nextIndex[ar.from] == (ni+1)) && (matchIndex[ar.from] == (mi+1)) && (appended[sm.Id][sm.currentTerm] == (ap+1))
+	} else {
+		if reflect.TypeOf(r).Name() == "LogStore" {
+			r := getActionIndex(action,1)		
+			if flag == 1 {
+				r = getActionIndex(action,2)
+			}
+			return reflect.TypeOf(r).Name() == "Commit"
+		}
+		return false
+	}
+}
+			
+				
+	
+
+	
+
+
 func TestCandidate(t *testing.T) {
 	//fmt.Println("1")
 	p := make([]int,5)
@@ -622,50 +699,128 @@ sm.Log[2] = LogEntry{2,false,2}
 
 
 }	
+
+func TestLeader(t *testing.T) {
+	p := make([]int,5)
+	for i:=0 ; i<5; i++ {
+		p[i] = i+1
+	}
 	
+	action := make([]Action,0)
+	log := make([]LogEntry,100)
+	
+	var sm = StateMachine{
+		Id: 2, 
+		state: leader, 
+		leaderId: 2, 
+		peers: p, 
+		totalServers: 5, 
+		currentTerm: 2, 
+		lastLogIndex: 0, 
+		lastLogTerm: 0, 
+		//lastApplied: 0, 
+		votedFor: -1, 
+		commitIndex: 0, 
+		Log: log}
+
+	receivedVotes := make([][]int,10) 
+
+	for i := range sm.peers {
+        	receivedVotes[i] = make([]int, 10)
+    	}
+
+	yesVotes 	= make([][]int,sm.totalServers+1)
+	for i := range sm.peers {
+        	yesVotes[i] = make([]int, 10)
+    	}
+
+	noVotes 	= make([][]int,sm.totalServers+1)
+	for i := range sm.peers {
+        	noVotes[i] = make([]int, 10)
+    	}
+
+	appended = make([][]int, 10)
+	for i := range sm.peers {
+        	appended[i] = make([]int, 10)
+    	}
+
+	nextIndex = make([]int, 10)
+	matchIndex = make([]int, sm.totalServers+1)
+	
+	action = sm.processEvents(VoteRequest{1,1,0,0}) //case 2
+	if(!leaderVoteRequest(sm,VoteRequest{1,1,0,0},action)) {
+		fmt.Println("leader vote request failed")
+	}
+	action = sm.processEvents(AppendEntriesRequest{1,1,0,0,false,0}) //case 2
+	if(!leaderAppendRequest(sm,AppendEntriesRequest{1,1,0,0,false,0},action)) {
+		fmt.Println("leader append request failed - 2")
+	}
+
+	action = sm.processEvents(VoteRequest{3,1,0,0}) //case 1
+	if(!leaderVoteRequest(sm,VoteRequest{3,1,0,0},action)) {
+		fmt.Println("leader vote request failed")
+	}
+	
+	sm = StateMachine{
+		Id: 2, 
+		state: leader, 
+		leaderId: 2, 
+		peers: p, 
+		totalServers: 5, 
+		currentTerm: 2, 
+		lastLogIndex: 0, 
+		lastLogTerm: 0, 
+		//lastApplied: 0, 
+		votedFor: -1, 
+		commitIndex: 0, 
+		Log: log}
+
+	action = sm.processEvents(AppendEntriesRequest{3,1,0,0,false,0}) //case 1
+	if(!leaderAppendRequest(sm,AppendEntriesRequest{3,1,0,0,false,0},action)) {
+		fmt.Println("leader append request failed - 1")
+	}
+	/*
+	sm = StateMachine{
+		Id: 2, 
+		state: leader, 
+		leaderId: 2, 
+		peers: p, 
+		totalServers: 5, 
+		currentTerm: 3, 
+		lastLogIndex: 2, 
+		lastLogTerm: 3, 
+		//lastApplied: 0, 
+		votedFor: -1, 
+		commitIndex: 1, 
+		Log: log}
+sm.Log[0] = LogEntry{1,true,0}
+sm.Log[1] = LogEntry{2,true,1}
+sm.Log[2] = LogEntry{3,false,2}
 
 
-/*
-	fmt.Println(sm.currentTerm, sm.votedFor,sm.state)
-	vr := VoteRequest{1,1,0,0}
-	action = append(action, sm.processEvents(vr))
-	fmt.Println(sm.currentTerm, sm.votedFor,sm.state)
-	//vr1 := VoteRequest{3,1,0,0}
-	//action = append(action, sm.processEvents(vr1))
-	/*vs := VoteResponse{1,true,2}
-	action = append(action, sm.processEvents(vs))
-	//fmt.Println(sm.Id, sm.currentTerm, sm.votedFor,sm.state,receivedVotes[sm.Id][sm.currentTerm])
-	vs = VoteResponse{1,true,3}
-	action = append(action, sm.processEvents(vs))
+	action = make([]Action,0)
+	nextIndex[1] = 2
+
+	if (!leaderAppendResponse(sm,AppendEntriesResponse{3,1,false,3}, action)) {
+		fmt.Println("leader append response failed - 1")
+	}
 	
-	vs = VoteResponse{3,true,4}
-	action = append(action, sm.processEvents(vs))	
-	
-	vs = VoteResponse{1,false,4}
-	action = append(action, sm.processEvents(vs))	
-	vs = VoteResponse{1,true,5}
-	action = append(action, sm.processEvents(vs))
-	//vs := VoteResponse{3,true,2}
-	*/
-	/*vs := VoteResponse{1,false,2}
-	action = append(action, sm.processEvents(vs))
-	//fmt.Println(sm.Id, sm.currentTerm, sm.votedFor,sm.state,receivedVotes[sm.Id][sm.currentTerm])
-	vs = VoteResponse{1,false,3}
-	action = append(action, sm.processEvents(vs))
-	
-	vs = VoteResponse{3,false,4}
-	action = append(action, sm.processEvents(vs))	
-	
-	vs = VoteResponse{1,false,4}
-	action = append(action, sm.processEvents(vs))	
-	vs = VoteResponse{1,true,5}
-	action = append(action, sm.processEvents(vs))
-	//vs := VoteResponse{3,true,2}
-	
-	var data []int
-	fmt.Println(sm.Id, sm.currentTerm, sm.votedFor,sm.state, yesVotes[sm.Id][sm.currentTerm])
-	ar := AppendEntriesRequest(3,1,0,0,data,0)
-	action = append(action, sm.processEvents(ar))
-	fmt.Println(sm.Id, sm.currentTerm, sm.votedFor,sm.state, yesVotes[sm.Id][sm.currentTerm])
+	if (!leaderAppendResponse(sm,AppendEntriesResponse{3,1,true,3}, action)) {
+		fmt.Println("leader append response failed - 1")
+	}
+	if (!leaderAppendResponse(sm,AppendEntriesResponse{3,3,true,3}, action)) {
+		fmt.Println("leader append response failed - 1")
+	}
+	if (!leaderAppendResponse(sm,AppendEntriesResponse{3,4,true,3}, action)) {
+		fmt.Println("leader append response failed - 1")
+	}
+	if (!leaderAppendResponse(sm,AppendEntriesResponse{3,5,true,3}, action)) {
+		fmt.Println("leader append response failed - 1")
+	}
+
+	if (!leaderAppendResponse(sm,AppendEntriesResponse{5,1,true,3}, action)) {
+		fmt.Println("leader append response failed - 1")
+	}
 */
 
+}	
