@@ -31,7 +31,8 @@ type LogEntry struct {
 	index		int
 }
 type ClientAppend struct {}
-type ClientResponse struct {
+type Commit struct {
+	Index		int
 	success 	bool
 }
 type VoteRequest struct {
@@ -446,7 +447,8 @@ switch sm.state {
 					sm.leaderId = -1
 					flag = 1
 					action = append(action, StateStore{sm.Id,sm.state,sm.leaderId,sm.currentTerm})
-					//action = append(action, Send{res.leaderId, AppendEntriesResponse{sm.currentTerm, sm.Id, false, sm.lastLogIndex}})
+				} else {
+					action = append(action, Send{res.leaderId, AppendEntriesResponse{sm.currentTerm, sm.Id, false, sm.lastLogIndex}})
 					
 				}
 			case VoteRequest:
@@ -458,8 +460,9 @@ switch sm.state {
 					sm.leaderId = -1
 					flag = 1
 					action = append(action, StateStore{sm.Id,sm.state,sm.leaderId,sm.currentTerm})
-					
-					//action = append(action, Send{res.candidateId, VoteResponse{sm.currentTerm, false, sm.Id}})
+				} else {
+
+					action = append(action, Send{res.candidateId, VoteResponse{sm.currentTerm, false, sm.Id}})
 					
 				}
 			case AppendEntriesResponse:
@@ -494,9 +497,10 @@ switch sm.state {
 					fmt.Println("yo")
 				
 					sm.commitIndex++
-					action = append(action, Send{clientId, ClientResponse{true}})
+					action = append(action, Send{clientId, Commit{sm.commitIndex,true}})
 				}
 			case Timeout:
+				action = append(action, Send{sm.Id,ClientAppend{}})
 			case ClientAppend:
 					fmt.Println("hii")
 					newEntry := LogEntry{sm.currentTerm, false, sm.lastLogIndex+1}
