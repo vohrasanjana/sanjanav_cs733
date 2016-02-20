@@ -271,7 +271,7 @@ func followerVoteRequest(sm StateMachine, vr VoteRequest, action []Action) bool 
 	return false
 }
 
-/*
+
 func TestCandidate(t *testing.T) {
 	//fmt.Println("1")
 	p := make([]int,5)
@@ -471,7 +471,7 @@ sm.Log[2] = LogEntry{2,false,2}
 	}
 	
 }	
-*/
+
 func TestFollower(t *testing.T) {	
 	
 	p := make([]int,5)
