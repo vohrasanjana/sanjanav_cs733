@@ -9,7 +9,7 @@ The project basically involves two modules File Server (fs), and Raft Node (raft
 fs is a simple network file server. Each file has a version number, and the server keeps the latest version. The server handles four commands - read, write, compare-and-swap and delete. The files may also have an optional expiry time. A subsequent `cas` or `write` cancels an earlier expiry time, and imposes the new time.
 This package has been taken from the implementation at github.com/cs733-iitb/cs733/assignment1/ The required changes have been done for integrating with the system
 
-## Command Specification
+### Command Specification
 
 The format for each of the four commands is shown below,  
 
@@ -38,6 +38,4 @@ The latest state of the nodes is saved in a state file. This and the log file ca
 `go get github.com/vohrasanjana/sanjanav_cs733/assignment4/...`
 
 ```
-
-## References
 
