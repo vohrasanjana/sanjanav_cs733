@@ -1,5 +1,5 @@
 # A Distributed File System Using RAFT
-Project for the cource CS-733 : Engineering a Cloud, Spring 2015
+Project for the course CS-733 : Engineering a Cloud, Spring 2015
 
 RAFT is a consensus algorithm for managing replicated instructions over a cluster of servers in a consistent state.This project is a Go implementation of a Distributed File System which uses the Raft consensus protocol for replication and forms a consistent state of log with majority servers agreeing on the actions.
 
