@@ -3,12 +3,12 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/sanjana/CS733/assignment4/fs"
+	"github.com/vohrasanjana/sanjanav_cs733/assignment4/fs"
 	"net"
 	"os"
 	"strconv"
 	"encoding/json"
-	"github.com/sanjana/CS733/assignment4/raft"
+	"github.com/vohrasanjana/sanjanav_cs733/assignment4/raft"
 
 
 )
