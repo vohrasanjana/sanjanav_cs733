@@ -304,6 +304,7 @@ func Running(rf *RaftNode) {			//parallelly runs for all raft nodes, listens on 
 			rf.DoActions(actions)
 		case <-rf.ShutCh:
 			rf.sm.state = follower
+			rf.server.Close()
 			rf.Timeout.Stop()
 
 			return;
