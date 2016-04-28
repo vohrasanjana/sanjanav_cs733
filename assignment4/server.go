@@ -118,4 +118,7 @@ func serverMain(id int,adr []string,conf *raft.Config) (*raft.RaftNode) {
 	return rf
 }
 
+func main(){
+	
+}
 
