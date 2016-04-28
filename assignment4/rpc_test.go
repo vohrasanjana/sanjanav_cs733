@@ -393,6 +393,121 @@ func TestRPC_ConcurrentCas(t *testing.T) {
 	fmt.Println("SUCCESSFUL - CONCURRENT CAS")
 }
 
+func TestRPC_ShutDown(t *testing.T) {
+	ldr := raft.LeaderId(rfNodes)
+	//fmt.Println(ldr)
+	rfNodes[ldr-1].ShutDown()
+	time.Sleep(time.Duration(100)*time.Millisecond)
+	ldr = raft.LeaderId(rfNodes)
+	//fmt.Println(ldr)
+	time.Sleep(time.Duration(200)*time.Millisecond)
+
+	cl := mkClient(t)
+	defer cl.close()
+
+	m, err := cl.read("cs733net")
+	expect(t, m, &Msg{Kind: 'F'}, "file not found", err)
+
+	// Read non-existent file cs733net
+	m, err = cl.delete("cs733net")
+	expect(t, m, &Msg{Kind: 'F'}, "file not found", err)
+
+	// Write file cs733net
+	data := "Cloud fun"
+	m, err = cl.write("cs733net", data, 0)
+	expect(t, m, &Msg{Kind: 'O'}, "write success", err)
+
+	// Expect to read it back
+	m, err = cl.read("cs733net")
+	expect(t, m, &Msg{Kind: 'C', Contents: []byte(data)}, "read my write", err)
+
+	// CAS in new value
+	version1 := m.Version
+	data2 := "Cloud fun 2"
+	// Cas new value
+	m, err = cl.cas("cs733net", version1, data2, 0)
+	expect(t, m, &Msg{Kind: 'O'}, "cas success", err)
+
+	// Expect to read it back
+	m, err = cl.read("cs733net")
+	expect(t, m, &Msg{Kind: 'C', Contents: []byte(data2)}, "read my cas", err)
+
+	// Expect Cas to fail with old version
+	m, err = cl.cas("cs733net", version1, data, 0)
+	expect(t, m, &Msg{Kind: 'V'}, "cas version mismatch", err)
+
+	// Expect a failed cas to not have succeeded. Read should return data2.
+	m, err = cl.read("cs733net")
+	expect(t, m, &Msg{Kind: 'C', Contents: []byte(data2)}, "failed cas to not have succeeded", err)
+
+	// delete
+	m, err = cl.delete("cs733net")
+	expect(t, m, &Msg{Kind: 'O'}, "delete success", err)
+
+	// Expect to not find the file
+	m, err = cl.read("cs733net")
+	expect(t, m, &Msg{Kind: 'F'}, "file not found", err)
+	fmt.Println("SUCCESSFUL - LEADER SHUTDOWN")
+}
+
+func TestRPC_ShutDown2(t *testing.T) {
+	ldr := raft.LeaderId(rfNodes)
+	//fmt.Println(ldr)
+	rfNodes[ldr-1].ShutDown()
+	time.Sleep(time.Duration(100)*time.Millisecond)
+	ldr = raft.LeaderId(rfNodes)
+	//fmt.Println(ldr)
+	time.Sleep(time.Duration(200)*time.Millisecond)
+
+	cl := mkClient(t)
+	defer cl.close()
+
+	m, err := cl.read("cs733net")
+	expect(t, m, &Msg{Kind: 'F'}, "file not found", err)
+
+	// Read non-existent file cs733net
+	m, err = cl.delete("cs733net")
+	expect(t, m, &Msg{Kind: 'F'}, "file not found", err)
+
+	// Write file cs733net
+	data := "Cloud fun"
+	m, err = cl.write("cs733net", data, 0)
+	expect(t, m, &Msg{Kind: 'O'}, "write success", err)
+
+	// Expect to read it back
+	m, err = cl.read("cs733net")
+	expect(t, m, &Msg{Kind: 'C', Contents: []byte(data)}, "read my write", err)
+
+	// CAS in new value
+	version1 := m.Version
+	data2 := "Cloud fun 2"
+	// Cas new value
+	m, err = cl.cas("cs733net", version1, data2, 0)
+	expect(t, m, &Msg{Kind: 'O'}, "cas success", err)
+
+	// Expect to read it back
+	m, err = cl.read("cs733net")
+	expect(t, m, &Msg{Kind: 'C', Contents: []byte(data2)}, "read my cas", err)
+
+	// Expect Cas to fail with old version
+	m, err = cl.cas("cs733net", version1, data, 0)
+	expect(t, m, &Msg{Kind: 'V'}, "cas version mismatch", err)
+
+	// Expect a failed cas to not have succeeded. Read should return data2.
+	m, err = cl.read("cs733net")
+	expect(t, m, &Msg{Kind: 'C', Contents: []byte(data2)}, "failed cas to not have succeeded", err)
+
+	// delete
+	m, err = cl.delete("cs733net")
+	expect(t, m, &Msg{Kind: 'O'}, "delete success", err)
+
+	// Expect to not find the file
+	m, err = cl.read("cs733net")
+	expect(t, m, &Msg{Kind: 'F'}, "file not found", err)
+	fmt.Println("SUCCESSFUL - TWO NODES SHUTDOWN")
+}
+	
+
 //----------------------------------------------------------------------
 // Utility functions
 
@@ -411,6 +526,7 @@ type Msg struct {
 
 func mkClient(t *testing.T) *Client {
 	var client *Client
+	lId = raft.LeaderId(rfNodes)
 	raddr, err := net.ResolveTCPAddr("tcp", addr[lId-1])
 	if err == nil {
 		conn, err := net.DialTCP("tcp", nil, raddr)
