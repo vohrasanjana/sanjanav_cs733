@@ -108,7 +108,6 @@ func serverMain(id int,adr []string,conf *raft.Config) (*raft.RaftNode) {
 	tcp_acceptor, err := net.ListenTCP("tcp", tcpaddr)
 	check(err)
 	rf := raft.New(id, conf)
-	//client_chan_map := make(map[int]chan *fs.Msg)
 	go func(rfnode *raft.RaftNode) {
 		for {	//listen to client
 			tcp_conn, err := tcp_acceptor.AcceptTCP()
